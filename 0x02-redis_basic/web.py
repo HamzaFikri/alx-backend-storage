@@ -1,34 +1,36 @@
 #!/usr/bin/env python3
-"""Module containing function to return HTML content of a particular URL"""
-import redis
+"""
+web cache and tracker
+"""
 import requests
+import redis
 from functools import wraps
 
-data = redis.Redis()
+store = redis.Redis()
 
 
-def cached_content_fun(method):
-    """Function that returns html content"""
-
+def count_url_access(method):
+    """ Decorator counting how many times
+    a URL is accessed """
     @wraps(method)
-    def wrapper(url: str):
-        cached_content = data.get(f"cached:{url}")
-        if cached_content:
-            return cached_content.decode('utf-8')
+    def wrapper(url):
+        cached_key = "cached:" + url
+        cached_data = store.get(cached_key)
+        if cached_data:
+            return cached_data.decode("utf-8")
 
-        content = method(url)
-        data.setex(f"cached:{url}", 10, content)
-        return content
+        count_key = "count:" + url
+        html = method(url)
 
+        store.incr(count_key)
+        store.set(cached_key, html)
+        store.expire(cached_key, 10)
+        return html
     return wrapper
 
 
-@cached_content_fun
+@count_url_access
 def get_page(url: str) -> str:
-    """Function thattracks how many times a particular URL was accessed"""
-
-    count = data.incr(f"count:{url}")
-    content = requests.get(url).text
-    # print(content)
-    # print("Count: {}".format(count))
-    return content
+    """ Returns HTML content of a url """
+    res = requests.get(url)
+    return res.text
