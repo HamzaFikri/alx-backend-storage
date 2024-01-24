@@ -1,32 +1,34 @@
 #!/usr/bin/env python3
-""" Redis Module """
-
-from functools import wraps
+"""Module containing function to return HTML content of a particular URL"""
 import redis
 import requests
-from typing import Callable
+from functools import wraps
 
-redis_ = redis.Redis()
+data = redis.Redis()
 
 
-def count_requests(method: Callable) -> Callable:
-    """ Decortator for counting """
+def cached_content_fun(method):
+    """Function that returns html content"""
+
     @wraps(method)
-    def wrapper(url):  # sourcery skip: use-named-expression
-        """ Wrapper for decorator """
-        redis_.incr(f"count:{url}")
-        cached_html = redis_.get(f"cached:{url}")
-        if cached_html:
-            return cached_html.decode('utf-8')
-        html = method(url)
-        redis_.setex(f"cached:{url}", 10, html)
-        return html
+    def wrapper(url: str):
+        cached_content = data.get(f"cached:{url}")
+        if cached_content:
+            return cached_content.decode('utf-8')
+
+        content = method(url)
+        data.setex(f"cached:{url}", 10, content)
+        return content
 
     return wrapper
 
 
-@count_requests
+@cached_content_fun
 def get_page(url: str) -> str:
-    """ Obtain the HTML content of a  URL """
-    req = requests.get(url)
-    return req.text
+    """Function thattracks how many times a particular URL was accessed"""
+
+    count = data.incr(f"count:{url}")
+    content = requests.get(url).text
+    # print(content)
+    # print("Count: {}".format(count))
+    return content
